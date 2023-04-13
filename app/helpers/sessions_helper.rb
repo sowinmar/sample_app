@@ -3,6 +3,10 @@ module SessionsHelper
   # Logs in the given user.
   def log_in(user)
     session[:user_id] = user.id
+    # Guard against session replay attacks.
+    # See https://bit.ly/33UvK0w for more.
+    session[:session_token] = user.session_token
+
   end
 
   # Remembers a user in a persistent session.
@@ -16,7 +20,10 @@ module SessionsHelper
   # Returns the user corresponding to the remember token cookie.
   def current_user
     if (user_id = session[:user_id])
-      @current_user ||= User.find_by(id: user_id)
+      user = User.find_by(id: user_id)
+      if user && session[:session_token] == user.session_token
+        @current_user = user
+      end
     elsif (user_id = cookies.encrypted[:user_id])
       user = User.find_by(id: user_id)
       if user && user.authenticated?(cookies[:remember_token])
@@ -24,6 +31,11 @@ module SessionsHelper
         @current_user = user
       end
     end
+  end
+
+  # Returns true if the given user is the current user.
+  def current_user?(user)
+    user && user == current_user
   end
 
   # Returns true if the user is logged in, false otherwise.
@@ -45,6 +57,9 @@ module SessionsHelper
     @current_user = nil
   end
 
-  
+  # Stores the URL trying to be accessed.
+  def store_location
+    session[:forwarding_url] = request.original_url if request.get?
+  end
 
 end
